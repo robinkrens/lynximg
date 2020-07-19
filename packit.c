@@ -130,11 +130,14 @@ uint8_t * set_bits(uint8_t * byteoffset, int * currentbit,  uint8_t mask)
 uint8_t * set_literal(uint8_t * byteoffset, int * currentbit, uint8_t mask, int cnt) 
 {
 
+//	printf("color: %d\n", mask);
 	byteoffset = set_bits(byteoffset, currentbit, cnt);
 	byteoffset = set_bits(byteoffset, currentbit, mask);
 
-	if (cnt > 0)
-		byteoffset = set_bits(byteoffset, currentbit, mask); 
+	//while (cnt > 0) {
+	//	byteoffset = set_bits(byteoffset, currentbit, mask);
+	//	cnt--;
+	//}
 
 	return byteoffset;
 }
@@ -158,11 +161,6 @@ int pack_line(packed_data_t * data)
 		//printf("Repeat Count: %d, Color: %d\n", data->repeatcount, data->color);
 		int count = data->repeatcount;
 
-		//if (count == 1) {
-		//	*p |= 0x1 << (7 - bitindex);
-		//	goto literal;
-		//}
-
 		while(count > 16) {
 			bitindex++;
 			if (bitindex > 7) {
@@ -170,31 +168,31 @@ int pack_line(packed_data_t * data)
 				p++;
 			}
 			p = set_bits(p, &bitindex, 0x0F);
-			p = set_bits(p, &bitindex, data->color);
+			p = set_bits(p, &bitindex, data->color + 1);
 
 			count -= 16;
 		}
 		
-		if (count < 3) {
+		if (count == 1) {
 			*p |= 0x1 << (7 - bitindex);
 			bitindex++;
 			if (bitindex > 7) {
 				bitindex = 0;
 				p++;
 			}
-			p = set_literal(p, &bitindex, data->color, count - 1);
+	
+			p = set_literal(p, &bitindex, data->color + 1, count - 1);
+		
 		}
 		else {
-		
 			bitindex++;
 			if (bitindex > 7) {
 				bitindex = 0;
 				p++;
 			}
-
-			p = set_bits(p, &bitindex, count - 1);
-			p = set_bits(p, &bitindex, data->color);
-
+			
+			p = set_bits(p, &bitindex, count-1);
+			p = set_bits(p, &bitindex, data->color + 1);
 		}
 
 		data = data->next;
@@ -212,7 +210,7 @@ int pack_line(packed_data_t * data)
 	while (*top != 0x0) {
 		printf("0x%02x, ", *top++);
 	}
-	printf("\n");
+	//printf("\n");
 
 	return 0;
 }
