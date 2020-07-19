@@ -1,2 +1,2 @@
 all:
-	cc packit.c -lSDL2 -lm
+	cc packit.c -lSDL2 -lm -g

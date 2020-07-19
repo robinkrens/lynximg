@@ -2,7 +2,7 @@
  * File              : packit.c
  * Author            : Robin Krens <robin@robinkrens.nl>
  * Date              : 15.07.2020
- * Last Modified Date: 15.07.2020
+ * Last Modified Date: 18.07.2020
  * Last Modified By  : Robin Krens <robin@robinkrens.nl>
  *
  * Packit! is a simple tool for Atari Lynx to convert
@@ -32,7 +32,7 @@
 
 typedef struct packed_data {
 	int repeatcount;
-	uint8_t color; /* Palette color 0-16 */
+	uint8_t color; /* Palette color 0-15 */
 	struct packed_data * next;
 } packed_data_t;
 
@@ -103,58 +103,116 @@ int get_paletteindex(int color, int * palette, int current_count)
 	return -1;
 }
 
-int data_packet_line(int rowlength, uint8_t * data, int data_len)
+uint8_t * set_bits(uint8_t * byteoffset, int * currentbit,  uint8_t mask) 
 {
 
-	int offset = 0;
-	uint8_t * top;
-	uint8_t * linesprite = (uint8_t *) malloc(256);
-	bzero(linesprite, 0);
-
-	top = linesprite;
-
-	/* offset to next line of sprite */
-	*linesprite = rowlength/2 + 3;
-	linesprite++;
-	offset++;
-
-	/* first bit: literal */
-	*linesprite = 1 << 7;
-
-	/* number of pixels + 1 (rowlength) */
-	*linesprite |= rowlength-1 << 3;
-
-	//linesprite++;
-	//offset++;
-
-	/* pixel data */
-	for (int i = 0; i < data_len;) {
-		//*linesprite = *data << 7;
-		*linesprite |= *data >> 1;
-		linesprite++;
-		offset++;
-
-		*linesprite = (*data & 0x01) << 7;
-
-		data++;
-
-		if (i + 1 < data_len) {
-			*linesprite |= *data << 3;
-		//	linesprite++;
-		//	offset++;
+	if (*currentbit > 4) {
+		int remainder = *currentbit - 4;
+		*byteoffset |= mask >> remainder;
+		byteoffset++;
+		*byteoffset = mask << (8 - remainder);
+		*currentbit -= 4;
+	}
+	else {
+		*byteoffset |= mask << (4 - *currentbit);
+		*currentbit += 4;
+		if (*currentbit > 7) {
+			*currentbit = 0;
+			byteoffset++;
 		}
 
-		data++;
-		
-		i += 2;
 	}
 
-	/* padding */
-	//linesprite++;
-	offset++;
+	return byteoffset;
 
-	for (int i = 0; i < offset; i++)
-		printf("%0X:", top[i]);
+}
+
+uint8_t * set_literal(uint8_t * byteoffset, int * currentbit, uint8_t mask, int cnt) 
+{
+
+	byteoffset = set_bits(byteoffset, currentbit, cnt);
+	byteoffset = set_bits(byteoffset, currentbit, mask);
+
+	if (cnt > 0)
+		byteoffset = set_bits(byteoffset, currentbit, mask); 
+
+	return byteoffset;
+}
+
+int pack_line(packed_data_t * data)
+{
+	//int offset = 0;
+	int bitindex = 0;
+	uint8_t tmpbuf[256] = {};
+	bzero(tmpbuf, 0);
+	uint8_t * p = tmpbuf;
+	uint8_t * top = tmpbuf;
+
+	//printf("line\n");
+
+	/* first entry is reserved for offset */
+	*p++ = 0xFF;
+
+	while(data) {
+
+		//printf("Repeat Count: %d, Color: %d\n", data->repeatcount, data->color);
+		int count = data->repeatcount;
+
+		//if (count == 1) {
+		//	*p |= 0x1 << (7 - bitindex);
+		//	goto literal;
+		//}
+
+		while(count > 16) {
+			bitindex++;
+			if (bitindex > 7) {
+				bitindex = 0;
+				p++;
+			}
+			p = set_bits(p, &bitindex, 0x0F);
+			p = set_bits(p, &bitindex, data->color);
+
+			count -= 16;
+		}
+		
+		if (count < 3) {
+			*p |= 0x1 << (7 - bitindex);
+			bitindex++;
+			if (bitindex > 7) {
+				bitindex = 0;
+				p++;
+			}
+			p = set_literal(p, &bitindex, data->color, count - 1);
+		}
+		else {
+		
+			bitindex++;
+			if (bitindex > 7) {
+				bitindex = 0;
+				p++;
+			}
+
+			p = set_bits(p, &bitindex, count - 1);
+			p = set_bits(p, &bitindex, data->color);
+
+		}
+
+		data = data->next;
+
+	}
+
+	int offset = 0;
+	while(*top++ != 0x0) {
+		offset++;
+	}
+
+	top = tmpbuf;
+	top[0] = offset;
+
+	while (*top != 0x0) {
+		printf("0x%02x, ", *top++);
+	}
+	printf("\n");
 
 	return 0;
 }
@@ -228,20 +286,26 @@ int main()
 			
 		}
 
-		packed_data_t * prev;
+		packed_data_t * prev, * c;
 		packed_data_t * l = scan_line(top, rawbmp->w);
 
-		printf("new line\n");
+		c = l;
 
-		while(l->next != NULL) {
-			printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
-			prev = l;	
-			l = l->next;
-			free(prev);	
-		}
-		printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
-		free(l);
-		free(top);
+		//printf("new line\n");
+		//
+		pack_line(l);
+
+		l = c;
+
+	//	while(l->next != NULL) {
+	//		printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
+	//		prev = l;	
+	//		l = l->next;
+	//		free(prev);	
+	//	}
+	//	printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
+	//	free(l);
+	//	free(top);
 
 		rawbmp->pixels += padding;
 	}
@@ -249,28 +313,6 @@ int main()
 	fprintf(stdout, "Image has %d colors\n", colorcnt);
 	
 
-//	uint8_t buff[8];
-//	buff[0] = 0xAA;
-//	buff[1] = 0x22;
-//	buff[2] = 0x22;
-//	buff[3] = 0x33;
-//	buff[4] = 0x33;
-//	buff[5] = 0x33;
-//	buff[6] = 0x33;
-//	buff[7] = 0xAA;
-
-
-
-//	uint8_t buf[5];
-//
-//	buf[0] = 0x0F;
-//	buf[1] = 0x0F;
-//	buf[2] = 0x0F;
-//	buf[3] = 0x0F;
-//	buf[4] = 0x0F;
-//
-//	data_packet_line(5, buf, 5);
-//
 	//SDL_FreeSurface(rawbmp);
 
 	return 0;
