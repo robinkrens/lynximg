@@ -1,8 +1,8 @@
 /**
- * File              : packit.c
+ * File              : lynximg.c
  * Author            : Robin Krens <robin@robinkrens.nl>
  * Date              : 15.07.2020
- * Last Modified Date: 18.07.2020
+ * Last Modified Date: 19.07.2020
  * Last Modified By  : Robin Krens <robin@robinkrens.nl>
  *
  * lynximg is a simple tool for Atari Lynx to convert
@@ -211,13 +211,18 @@ int pack_line(packed_data_t * data)
 	top = tmpbuf;
 	top[0] = size;
 
+	/* Hardware bug correction */
+	if (top[size-1] & 0x1) {
+		printf("correcting hardware bug");
+	}
+
 //	while (*top != 0x0) {
 //		printf("0x%02x, ", *top++);
 //	}
 
 	for (int i = 0; i < size; i++)
 		printf("0x%02x, ", top[i]);
-
+	
 	//printf("\n");
 		while(datatop->next != NULL) {
 	//		printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
@@ -244,7 +249,7 @@ int main()
 	int palettebuf[MAX_COLORS];
 
 	rawbmp = SDL_LoadBMP("brick.bmp");
-
+	
 	if(!rawbmp) {
 		fprintf(stderr, "Can't load bmp file!\n");
 		return -1;
@@ -266,6 +271,12 @@ int main()
 	/* Padding; currently only 24-bit (3 byte) supported  */
 	int padding = ceil((float)rawbmp->w * 3/4) * 4 - (rawbmp->w * 3);
 
+
+	SDL_LockSurface(rawbmp);
+	rawbmp->userdata = rawbmp->pixels;
+	SDL_UnlockSurface(rawbmp);
+	
+	
 	for (int h = 0; h < rawbmp->h; h++) {
 
 		uint8_t * top;
@@ -276,9 +287,9 @@ int main()
 
 			SDL_LockSurface(rawbmp);
 			/* 24-bit pixel data are loaded as blue, green, red */
-			index_b = * (uint8_t * ) rawbmp->pixels++;
-			index_g = * (uint8_t * ) rawbmp->pixels++;
-			index_r = * (uint8_t * ) rawbmp->pixels++;
+			index_b = * (uint8_t * ) rawbmp->userdata++;
+			index_g = * (uint8_t * ) rawbmp->userdata++;
+			index_r = * (uint8_t * ) rawbmp->userdata++;
 			SDL_UnlockSurface(rawbmp);
 
 			/* Check unique color */
@@ -311,14 +322,16 @@ int main()
 
 		l = c;
 
-		rawbmp->pixels += padding;
+		SDL_LockSurface(rawbmp);
+		rawbmp->userdata += padding;
+		SDL_UnlockSurface(rawbmp);
 		free(top);
 	}
 		
 	fprintf(stdout, "Image has %d colors\n", colorcnt);
 	
 
-	//SDL_FreeSurface(rawbmp);
+	SDL_FreeSurface(rawbmp);
 
 	return 0;
 }
