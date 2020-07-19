@@ -151,6 +151,8 @@ int pack_line(packed_data_t * data)
 	uint8_t * p = tmpbuf;
 	uint8_t * top = tmpbuf;
 
+	packed_data_t * datatop, * dataprev;
+	datatop = data;
 	//printf("line\n");
 
 	/* first entry is reserved for offset */
@@ -211,6 +213,16 @@ int pack_line(packed_data_t * data)
 		printf("0x%02x, ", *top++);
 	}
 	//printf("\n");
+		while(datatop->next != NULL) {
+	//		printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
+			dataprev = datatop;	
+			datatop = datatop->next;
+			free(dataprev);	
+		}
+	//	printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
+		free(datatop);
+		//free(top);
+
 
 	return 0;
 }
@@ -289,23 +301,12 @@ int main()
 
 		c = l;
 
-		//printf("new line\n");
-		//
 		pack_line(l);
 
 		l = c;
 
-	//	while(l->next != NULL) {
-	//		printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
-	//		prev = l;	
-	//		l = l->next;
-	//		free(prev);	
-	//	}
-	//	printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
-	//	free(l);
-	//	free(top);
-
 		rawbmp->pixels += padding;
+		free(top);
 	}
 		
 	fprintf(stdout, "Image has %d colors\n", colorcnt);
