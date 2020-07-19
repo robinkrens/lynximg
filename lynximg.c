@@ -170,7 +170,7 @@ int pack_line(packed_data_t * data)
 				p++;
 			}
 			p = set_bits(p, &bitindex, 0x0F);
-			p = set_bits(p, &bitindex, data->color + 1);
+			p = set_bits(p, &bitindex, data->color);
 
 			count -= 16;
 		}
@@ -183,7 +183,7 @@ int pack_line(packed_data_t * data)
 				p++;
 			}
 	
-			p = set_literal(p, &bitindex, data->color + 1, count - 1);
+			p = set_literal(p, &bitindex, data->color, count - 1);
 		
 		}
 		else {
@@ -194,24 +194,30 @@ int pack_line(packed_data_t * data)
 			}
 			
 			p = set_bits(p, &bitindex, count-1);
-			p = set_bits(p, &bitindex, data->color + 1);
+			p = set_bits(p, &bitindex, data->color);
 		}
 
 		data = data->next;
 
 	}
 
-	int offset = 0;
-	while(*top++ != 0x0) {
-		offset++;
-	}
+	//int offset = 0;
+	//while(*top++ != 0x0) {
+	//	offset++;
+	//}
+
+	int size =  p - tmpbuf + 1;
 
 	top = tmpbuf;
-	top[0] = offset;
+	top[0] = size;
 
-	while (*top != 0x0) {
-		printf("0x%02x, ", *top++);
-	}
+//	while (*top != 0x0) {
+//		printf("0x%02x, ", *top++);
+//	}
+
+	for (int i = 0; i < size; i++)
+		printf("0x%02x, ", top[i]);
+
 	//printf("\n");
 		while(datatop->next != NULL) {
 	//		printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
