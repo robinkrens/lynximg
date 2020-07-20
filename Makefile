@@ -1,2 +1,2 @@
 all:
-	cc lynximg.c -lSDL2 -lm -g
+	cc lynximg.c -lSDL2 -lm -g -o lynximg

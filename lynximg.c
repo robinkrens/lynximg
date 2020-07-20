@@ -2,7 +2,7 @@
  * File              : lynximg.c
  * Author            : Robin Krens <robin@robinkrens.nl>
  * Date              : 15.07.2020
- * Last Modified Date: 19.07.2020
+ * Last Modified Date: 20.07.2020
  * Last Modified By  : Robin Krens <robin@robinkrens.nl>
  *
  * lynximg is a simple tool for Atari Lynx to convert
@@ -24,10 +24,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <math.h>
 #include <SDL2/SDL_image.h>
 
-#define MAX_COLORS 256
+#define MAX_COLORS 16
 #define VERBOSE 0
 
 typedef struct packed_data {
@@ -66,7 +67,6 @@ packed_data_t * scan_line(uint8_t * data, int data_len)
 	}
 	
 	return top;
-
 }
 
 
@@ -100,7 +100,7 @@ int get_paletteindex(int color, int * palette, int current_count)
 			return idx;
 	}
 	fprintf(stderr, "can't find color");
-	return -1;
+	exit(EXIT_FAILURE);
 }
 
 uint8_t * set_bits(uint8_t * byteoffset, int * currentbit,  uint8_t mask) 
@@ -130,21 +130,14 @@ uint8_t * set_bits(uint8_t * byteoffset, int * currentbit,  uint8_t mask)
 uint8_t * set_literal(uint8_t * byteoffset, int * currentbit, uint8_t mask, int cnt) 
 {
 
-//	printf("color: %d\n", mask);
 	byteoffset = set_bits(byteoffset, currentbit, cnt);
 	byteoffset = set_bits(byteoffset, currentbit, mask);
-
-	//while (cnt > 0) {
-	//	byteoffset = set_bits(byteoffset, currentbit, mask);
-	//	cnt--;
-	//}
 
 	return byteoffset;
 }
 
-int pack_line(packed_data_t * data)
+int pack_line(packed_data_t * data, FILE * os)
 {
-	//int offset = 0;
 	int bitindex = 0;
 	uint8_t tmpbuf[256] = {};
 	bzero(tmpbuf, 0);
@@ -153,7 +146,6 @@ int pack_line(packed_data_t * data)
 
 	packed_data_t * datatop, * dataprev;
 	datatop = data;
-	//printf("line\n");
 
 	/* first entry is reserved for offset */
 	*p++ = 0xFF;
@@ -201,11 +193,6 @@ int pack_line(packed_data_t * data)
 
 	}
 
-	//int offset = 0;
-	//while(*top++ != 0x0) {
-	//	offset++;
-	//}
-
 	int size =  p - tmpbuf + 1;
 
 	top = tmpbuf;
@@ -213,69 +200,117 @@ int pack_line(packed_data_t * data)
 
 	/* Hardware bug correction */
 	if (top[size-1] & 0x1) {
-		printf("correcting hardware bug");
+		p++;
+		size++;
 	}
 
-//	while (*top != 0x0) {
-//		printf("0x%02x, ", *top++);
-//	}
+	/* for (int i = 0; i < size; i++)
+		printf("0x%02x, ", top[i]); */
 
-	for (int i = 0; i < size; i++)
-		printf("0x%02x, ", top[i]);
+	int r = fwrite(top, 1, size-1, os);
+	if (r != size-1) {
+		fprintf(stderr, "write failure");
+	}
 	
 	//printf("\n");
-		while(datatop->next != NULL) {
-	//		printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
-			dataprev = datatop;	
-			datatop = datatop->next;
-			free(dataprev);	
-		}
-	//	printf("repeat: %d, color: %x\n", l->repeatcount, l->color);
-		free(datatop);
-		//free(top);
-
+	while(datatop->next != NULL) {
+		dataprev = datatop;	
+		datatop = datatop->next;
+		free(dataprev);	
+	}
+	
+	free(datatop);
 
 	return 0;
 }
 
-int main() 
+int main(int argc, char *argv[]) 
 {
 
 	SDL_Surface * rawbmp;
-	SDL_Color * color;
 	SDL_PixelFormat * fmt;
+	FILE * ostream;
+	char filename[256];
 	int index_r, index_g, index_b;
 	int colorcnt = 0;
 	int palettebuf[MAX_COLORS];
+	int opt;
+	int debug = 0;
 
-	rawbmp = SDL_LoadBMP("brick.bmp");
+	if (argc < 2) {
+		fprintf(stderr, "Usage: %s [file] \n", argv[0]);
+		exit(EXIT_FAILURE);
+	}
+
+/* TODO: command line arguments */
+//	while ((opt = getopt(argc, argv, "abfov:")) != -1) {
+//        	switch (opt) {
+//        		case 'a':
+//                   		printf("anchor point \n");
+//				break;
+//               		case 'b':
+//				printf("bits per pixel\n");
+//				break;
+//			case 'o':
+//				printf("output file\n");
+//				break;
+//			case 'f':
+//				printf("format\n");
+//				break;
+//			case 'v':
+//				debug = 1;
+//				break;
+//			
+//			default: /* '?' */
+//                   		fprintf(stderr, "Usage: %s [file] [-o file] \n", argv[0]);
+//				exit(EXIT_FAILURE);
+//               }
+//        }
 	
+	int fnsize = sizeof(argv[1]);
+
+	if ( argv[1][fnsize-2] != 'b' || argv[1][fnsize-1] != 'm' || argv[1][fnsize] != 'p' ) {
+                fprintf(stderr, "filename extensions not correct\n");
+		exit(EXIT_FAILURE);
+	}
+	
+	strncpy(filename, argv[1], fnsize-3);
+	strncpy(&filename[fnsize-3], ".lyi", 4); 
+
+	rawbmp = SDL_LoadBMP(argv[1]);
+
 	if(!rawbmp) {
 		fprintf(stderr, "Can't load bmp file!\n");
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 
 	if(rawbmp->format->BitsPerPixel != 24) {
 		fprintf(stderr, "Bits per pixel: %d not supported\n", rawbmp->format->BitsPerPixel);
-		return -1;
+		exit(EXIT_FAILURE);
 	}
 
-	print_image_stats(rawbmp);
+	if (debug)
+		print_image_stats(rawbmp);
+	
 	fmt = rawbmp->format;
-
 	if (fmt->palette) {
 		fprintf(stderr, "Can't handle palette BMP!\n");
-		return -1;
+		exit(EXIT_FAILURE);
+	}
+
+	/* file is truncated */
+	ostream = fopen(filename, "w");
+	if (!ostream) {
+		fprintf(stderr, "Can't open file for writing!\n");
+		exit(EXIT_FAILURE);
 	}
 
 	/* Padding; currently only 24-bit (3 byte) supported  */
 	int padding = ceil((float)rawbmp->w * 3/4) * 4 - (rawbmp->w * 3);
 
-
 	SDL_LockSurface(rawbmp);
 	rawbmp->userdata = rawbmp->pixels;
 	SDL_UnlockSurface(rawbmp);
-	
 	
 	for (int h = 0; h < rawbmp->h; h++) {
 
@@ -294,33 +329,23 @@ int main()
 
 			/* Check unique color */
 			if (check_unique(((index_b << 16) | (index_g << 8) | index_r), palettebuf, colorcnt)) {
-				if (colorcnt + 1 > MAX_COLORS) {
-					fprintf(stderr, "too many colors in bmp\n");
-					return -1;
-				}
-				if (colorcnt + 1 > 16) {
-					fprintf(stderr, "warning: image has over 16 different colors\n");
+				if (colorcnt + 1 > 15) {
+					fprintf(stderr, "image has over 16 different colors\n");
+					exit(EXIT_FAILURE);
 				}
 				palettebuf[colorcnt++] = ((index_b << 16) | (index_g << 8) | index_r);
 			}
 			
-			if (VERBOSE)
-				fprintf(stdout, "height:width: %d:%d, B-G-R: %d, %d, %d\n", h, w, index_b, index_g, index_r);
+			if (debug)
+				fprintf(stderr, "height:width: %d:%d, B-G-R: %d, %d, %d\n", h, w, index_b, index_g, index_r);
 
 			int idx = get_paletteindex(((index_b << 16) | (index_g << 8) | index_r), palettebuf, colorcnt);
-			//printf("idx: %d\n", idx);
 			*linebuf++ = idx;
 			
 		}
 
-		packed_data_t * prev, * c;
 		packed_data_t * l = scan_line(top, rawbmp->w);
-
-		c = l;
-
-		pack_line(l);
-
-		l = c;
+		pack_line(l, ostream);
 
 		SDL_LockSurface(rawbmp);
 		rawbmp->userdata += padding;
@@ -328,10 +353,12 @@ int main()
 		free(top);
 	}
 		
-	fprintf(stdout, "Image has %d colors\n", colorcnt);
+	if (debug)
+		fprintf(stderr, "Image has %d colors\n", colorcnt);
 	
-
 	SDL_FreeSurface(rawbmp);
+
+	fclose(ostream);
 
 	return 0;
 }
