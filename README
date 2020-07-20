@@ -1,0 +1,17 @@
+lynximg is a simple tool for Atari Lynx to convert
+bitmap files to a format that is understood by the
+Atari Lynx.
+
+Currently supported:
+	- Uncompressed 24-bit .bmp files
+	- Compressed 24-bit .bmp files
+ 
+You can use GIMP to export .bmp as 24 (r8/b8/g8) bits .bmp
+files. 
+
+Output is 4 bits per pixels (define as in Sprite Control
+Block as BPP4) 
+
+Usage: lynximg [file] 
+A file will be written with the same name, but with a .lyi 
+format. You can compile this file with your game.
