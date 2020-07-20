@@ -1,0 +1,21 @@
+dist: bionic
+language: c
+
+before_install:
+        - sudo apt-get update -qq
+install:
+        - sudo apt-get install -qq libsdl2-image-2.0-0
+
+compiler:
+        - gcc
+
+script:
+        - cd ${TRAVIS_BUILD_DIR}
+        - make
+
+after_success:
+        - echo "success!"
+
+after_failure:
+        - echo "failure :-("
+
